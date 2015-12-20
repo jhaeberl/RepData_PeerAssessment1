@@ -24,6 +24,7 @@ The dataset is stored in a comma-separated-value (CSV) file and there are a tota
 First load the data assuming the source file is in the current directory:
 ```{r}
 activity <- read.csv("activity.csv", stringsAsFactors = FALSE)
+summary(activity)
 ```
 Next load the packages we will be using. We suppress the messages printed when lodaing these packages.
 ```{r, warning=FALSE, message=FALSE}
@@ -40,28 +41,28 @@ We look at the first few observations:
 ```{r}
 head(activity)
 ```
-The `interval` variable values appear to the number of minutes elapsed since midninght of the corresponding day in increment of $5$ minutes. However, the value following $55$ is $100$ not $60$. The format is a kind of numerical version of the `hours:minutes` format without the semicolon (and with all leading zeroes removed.) This is not very useful to plot our time series (see below) so we build a new variable that truly counts the number of minutes elapsed since midnight in $5$ minute increments:
+The `interval` variable values appear to the numbers of minutes elapsed since midninght of the corresponding day in increment of $5$ minutes. However, the value following $55$ is $100$ not $60$. The maximum value in a day is $2355$ which is much larger than the actual number of minutes in a day. The format of `interval` is a kind of numerical version of the `hours:minutes` format without the semicolon (and with all leading zeroes removed.) This is not very useful to plot our time series (see below) so we build a new variable that truly counts the number of minutes elapsed since midnight in $5$ minute increments:
 ```{r}
 activity$minutesSinceMidnight <-
   floor(activity$interval/100) * 60 + activity$interval %% 100
 ```
-For each day, this variable ranges from $0$ to $1435$ since there $1440$ minutes in a day.
+For each day, `minutesSinceMidnight` ranges from $0$ to $1435$ since there are $1440$ minutes in a day.
 ```{r}
 summary(activity$minutesSinceMidnight)
 ```
 
 ## What is mean total number of steps taken per day?
 
-Note: we ignore the missing values in this part of the assignment
+Note: we are told to ignore the missing values in this part of the assignment which we take to mean removing these values from the computations using `na.rm = TRUE`.
 
-1. Compute the number of steps per day ignoring missing values:
+1. Compute the number of steps per day removing missing values:
 ```{r}
 tot_steps_by_day <- activity %>%
   group_by(date) %>%
   summarise(totalSteps = sum(steps, na.rm = TRUE))
 ```
 
-2. Make a histogram of the number of steps taken per day:
+2. Make a histogram of the number of steps taken per day. Note that we use `ggplot2` default bin width.
 ```{r, message=FALSE}
 g <-ggplot(tot_steps_by_day, aes(x = totalSteps)) +
   geom_histogram(fill = "salmon", color = "black") +
@@ -94,6 +95,12 @@ g = ggplot(avge_by_interval, aes(x=minutesSinceMidnight, y=avgeSteps)) +
 g
 ```
 
+2. We compute the $5$ minute interval that contains the maximum number of steps on average across all the days in the dataset:
+```{r}
+which(avge_by_interval$avgeSteps == max(avge_by_interval$avgeSteps))
+```
+The value $104$ corresponds to about 8:40 a.m. Indeed, $104*5/60$ is about $8.666667$.
+
 ## Imputing missing values
 1. We compute the total number of missing `steps` values:
 ```{r}
@@ -110,11 +117,14 @@ dayNA
 
 2. We impute the missing values using the mean number of steps per $5$ minute interval across all days as computed in the previous section and rounded to the nearest integer.
 
-3. We create a new dataset, `activityImputed`, that is equal to the original dataset but with the missing data filled in as described above. We then verify that there are no longer any missing `steps` values in the new dataset.
+3. We create a new dataset, `activityImputed`, that is equal to the original dataset but with the missing data filled in as described above. We loop over the $8$ days with all `steps` values missing and we replace all the `NA` values for the day with the (rounded) vector of average `steps` values, namely `avge_by_interval$avgeSteps`. 
 ```{r}
-activityImputed <- activity
-for (dayIdx in dayNA$date)
+activityImputed <- activity  # make a copy of the dataset
+for (dayIdx in dayNA$date)   # loop over the days with missing steps values
   activityImputed[activityImputed$date == dayIdx,]$steps = round(avge_by_interval$avgeSteps,0)
+```
+We verify that there are no longer any missing `steps` values in the new dataset.
+```{r}
 sum(is.na(activityImputed$steps))
 ```
 
@@ -129,7 +139,7 @@ And we make the corresponding histogram:
 g <-ggplot(tot_steps_by_dayImputed, aes(x = totalSteps)) +
   geom_histogram(fill = "salmon", color = "black") +
   xlab("Total number of steps per day") + 
-  ggtitle("Histogram of the total number of steps per day (using inputed data)")
+  ggtitle("Histogram of the total number of steps per day (using imputed data)")
 g
 ```
 
@@ -138,10 +148,10 @@ We compute the new `mean` and `median` values of the total number of steps:
 mean(tot_steps_by_dayImputed$totalSteps)
 median(tot_steps_by_dayImputed$totalSteps)
 ```
-Observe that the new values for the `mean` and `median` are now essentially equal while the values obtained above when removing NA values were substantially different, with the value of the `mean` less than that of the `median`.
+Observe that the new values for the `mean` and `median` are now essentially equal while the values obtained above when removing NA values were substantially different, with the value of the `mean` less than that of the `median`. This is not surprising since after removing the missing values we had $8$ days whose total number of `steps` were `0` therefore contributing nothing to the numerator in the computation of the `mean` but contributing to the denominator. Replacing these $0$ values with the `mean` forces the new `mean` to be greater.
 
 ## Are there differences in activity patterns between weekdays and weekends?
-1. We create a new factor in the dataset with two levels, `weekday` and `weekend` indicating whether a given date is a weekday or weekend day.
+1. We create a new factor in the dataset with two levels, `weekday` and `weekend` indicating whether a given date is a weekday or weekend day. We use the function `weekdays` which takes a date and returns a string description of the corresponding day, namely `Monday`, 'Tuesday', etc. 
 ```{r}
 activityImputed <- activityImputed %>%
   mutate(dayType = ifelse(weekdays(date) %in% c('Saturday','Sunday'), 'weekend', 'weekday'))
@@ -160,10 +170,10 @@ g = ggplot(avge_by_intervalWeekday, aes(x=minutesSinceMidnight, y=avgeSteps)) +
   facet_wrap(~ dayType, ncol = 1) +
   xlab("Number of minutes elapsed since midnight") +
   ylab("Number of steps per 5 minute interval") +
-  ggtitle("Average daily activity pattern")
+  ggtitle("Average daily activity pattern: week day vs. weekend day")
 g
 ```
 
-We observe definite differences in activity patterns between week days and weekend days. Activity starts earlier on week days (around 6:30 a.m.) and peaks higher around 9:00 a.m. However, we observe more activity on weekend days between mid-morning and about 8:30 p.m. than during week days, although the activity variation is higher on weekends than on week days.
+We observe definite differences in activity patterns between week days and weekend days. Activity starts earlier on week days (around 6:30 a.m.) and peaks higher around 9:00 a.m. However, we observe higher activity levels on weekend days between mid-morning and about 8:30 p.m. than during week days. Furthermore, the activity variation appears higher on weekends than on week days.
 
 
